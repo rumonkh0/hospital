@@ -26,34 +26,60 @@ searchPatientByID() {
     grep "^$id," patient.csv
 }
 
-updatePatientField() {
+updateFieldByID() {
     local id="$1"
-    local field="$2"
-    local patient_info=$(searchPatientByID "$id")
+    read -p "Which field want to change: " field_name
+    read -p "Enter new value: " new_value
 
-    if [ -n "$patient_info" ]; then
-        echo "Patient Found: "
-        echo "$patient_info"
+    local file="patient.csv"
+    local tempfile="temp.csv"
 
-        # Prompt for the field to update
-        read -p "Enter the field to update (Name, Age, Disease, BedNo, Fees, Paid, Due) for ID $id: " field_value
+    # Copy the content of patient.csv to temp.csv
+    # cp "$file" "$tempfile"
 
-        # Check if the field provided by the user is valid
-        if [[ "$field_value" =~ ^(Name|Age|Disease|BedNo|Fees|Paid|Due)$ ]]; then
-            # Ask for the new value for the specified field
-            read -p "Enter new $field_value for ID $id: " new_value
+    local found=false
+    local IFS=',' # Set the field separator to comma for CSV
 
-            # Update the specified field for the patient
-            awk -v id="$id" -v field="$field_value" -v new="$new_value" -F',' 'BEGIN {OFS=","} {if ($1 == id) $field = new; print}' patient.csv > temp.csv
-            mv temp.csv patient.csv
+    # Read each line of the file
+    while read -r line; do
+        # Split the line into fields using comma as delimiter
+        read -ra fields <<<"$line"
 
-            echo "Field '$field_value' updated for ID $id."
+        # Check if the ID matches
+        if [[ "${fields[0]}" == "$id" ]]; then
+            # Update the specified field
+            found=true
+            case "$field_name" in
+            "Name") fields[1]="$new_value" ;;
+            "Age") fields[2]="$new_value" ;;
+            "Disease") fields[3]="$new_value" ;;
+            "BedNo") fields[4]="$new_value" ;;
+            "Fees") fields[5]="$new_value" ;;
+            "Paid") fields[6]="$new_value" ;;
+            "Due") fields[7]="$new_value" ;;
+            *)
+                echo "Invalid field name"
+                exit 1
+                ;;
+            esac
+            # Reconstruct the line with updated field and write it to temp file
+            echo "${fields[*]}" >>"$tempfile"
         else
-            echo "Invalid field name. Please enter a valid field name."
+            # Write the line unchanged to temp file
+            echo "$line" >>"$tempfile"
         fi
+    done <"$file"
+
+    if ! $found; then
+        rm "$tempfile"
+        echo "n"
     else
-        echo "Patient with ID $id not found."
+        # Replace original file with updated content
+        mv "$tempfile" "$file"
+        echo "$field_name updated for ID $id."
+        echo "y"
     fi
+
 }
 
 function addPatient() {
@@ -89,43 +115,50 @@ searchPatient() {
     fi
 }
 function updatePatient() {
-    echo "Enter student id: "
-    read student_id_for_student
+    choice=n
+    while [ "$choice" == "n" ]; do
+        read -p "Enter patient id: " id field new
+        choice=$(updateFieldByID $id $field $new)
+        if [[ $choice == "n" ]]; then
+            echo "patient not found"
+        else
+            echo "patient updated"
+        fi
+    done
 
-    return_function_value student $student_id_for_student 2
-    student_return_value=$function_return_value
-
-    if [ "$student_return_value" == 0 ]; then
-        echo "Student not exsist"
-    else
-        head_banner
-        echo -e "\n=========================================="
-        echo -e "= Welcome $student_return_value"
-        echo -e "=========================================="
-
-        view_single_student $student_id_for_student
-    fi
 }
 function releasePatient() {
-    echo "not build yet"
+    local found=false
+
+    while ! $found; do
+
+        read -p "Enter patient id: " id
+        local file="patient.csv"
+        local tempfile="temp.csv"
+
+        while IFS=',' read -r line; do
+            local current_id=$(echo "$line" | cut -d',' -f1) # Get the ID of the current line
+
+            if [[ "$current_id" != "$id" ]]; then
+                echo "$line" >>"$tempfile" # Write lines that don't match the ID to temp file
+            else
+                found=true
+            fi
+        done <"$file"
+
+        if ! $found; then
+            echo "Patient with ID $id not found."
+            rm "$tempfile"
+        else
+            mv "$tempfile" "$file" && rm -f "$tempfile"
+            echo "Patient with ID $id deleted."
+        fi
+
+    done
 }
 printPatients() {
-    column -s',' -t < patient.csv
+    column -s',' -t <patient.csv
 }
-
-# getFullName() {
-#     local first_name="$1"
-#     local last_name="$2"
-    
-#     # Concatenate the first name and last name
-#     echo "$first_name + $last_name"
-# }
-
-# # Calling the function and capturing its output in a variable
-# read -p "enter " fir las
-# full_name=$(getFullName $fir $las)
-
-# echo "Full Name: $full_name"
 
 #main programme
 choice="y"
