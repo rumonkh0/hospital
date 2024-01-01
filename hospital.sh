@@ -1,10 +1,4 @@
 #!/bin/bash
-
-# Author Name: Rumon Khan
-# Author Email: rummankh0@gmail.com
-# Social Media: https://www.linkedin.com/in/rudradcruze/
-# © All rights reserved by rudradcruze - 2023
-
 function head_banner() {
     clear
     echo "*******************************************************"
@@ -16,8 +10,8 @@ function head_banner() {
     echo "*******************************************************"
 }
 getNextId() {
-    local last_id=$(tail -n 1 patient.csv | cut -d ',' -f1) # Extracts the ID from the last line
-    local next_id=$((last_id + 1))                          # Increments the last ID by 1 to generate the next ID
+    local last_id=$(tail -n 1 patient.csv | cut -d ',' -f1)
+    local next_id=$((last_id + 1))
     echo "$next_id"
 }
 
@@ -34,20 +28,13 @@ updateFieldByID() {
     local file="patient.csv"
     local tempfile="temp.csv"
 
-    # Copy the content of patient.csv to temp.csv
-    # cp "$file" "$tempfile"
-
     local found=false
-    local IFS=',' # Set the field separator to comma for CSV
+    local IFS=','
 
-    # Read each line of the file
     while read -r line; do
-        # Split the line into fields using comma as delimiter
         read -ra fields <<<"$line"
 
-        # Check if the ID matches
         if [[ "${fields[0]}" == "$id" ]]; then
-            # Update the specified field
             found=true
             case "$field_name" in
             "Name") fields[1]="$new_value" ;;
@@ -62,10 +49,8 @@ updateFieldByID() {
                 exit 1
                 ;;
             esac
-            # Reconstruct the line with updated field and write it to temp file
             echo "${fields[*]}" >>"$tempfile"
         else
-            # Write the line unchanged to temp file
             echo "$line" >>"$tempfile"
         fi
     done <"$file"
@@ -74,7 +59,6 @@ updateFieldByID() {
         rm "$tempfile"
         echo "n"
     else
-        # Replace original file with updated content
         mv "$tempfile" "$file"
         echo "$field_name updated for ID $id."
         echo "y"
@@ -82,23 +66,63 @@ updateFieldByID() {
 
 }
 
-#!/bin/bash
+beds=()
 bedAvailable() {
-
-    csv_file="beds.csv"
-    beds=()
-
-    # Read the CSV file and populate the array
+    unset beds
     while IFS= read -r line; do
         beds+=("$line")
-    done <"$csv_file"
+    done <"beds.csv"
 
-    # Displaying the content of the array
     echo "Available Beds:"
-   echo "$(IFS=', '; echo "${beds[*]}")"
+    sorted_beds=($(printf "%s\n" "${beds[@]}" | sort -n))
+    printf "%s, " "${sorted_beds[@]}"
     # for bed in "${beds[@]}"; do
     #     echo "$bed"
     # done
+}
+
+AvailableCheck() {
+    found=false
+    bed_to_check=$1
+    for bed in "${beds[@]}"; do
+        if [ "$bed" -eq "$bed_to_check" ]; then
+            found=true
+            break
+        fi
+    done
+
+    if $found; then
+        echo "Bed $bed is available."
+    else
+        echo "Bed $bed_to_check is not available."
+    fi
+}
+
+saveAvailableBeds() {
+    rm -f beds.csv
+    printf "%s\n" "${beds[@]}" >"beds.csv"
+}
+
+addBed() {
+    local new_bed="$1"
+    beds+=("$new_bed")
+    saveAvailableBeds
+}
+
+removeBed() {
+    local bed_to_remove="$1"
+    local index=-1
+    for ((i = 0; i < ${#beds[@]}; i++)); do
+        if [ "${beds[i]}" = "$bed_to_remove" ]; then
+            index=$i
+            break
+        fi
+    done
+
+    if [ "$index" -ne -1 ]; then
+        unset 'beds[index]'
+        saveAvailableBeds
+    fi
 }
 
 function addPatient() {
@@ -106,13 +130,16 @@ function addPatient() {
     read -p "patient age: " age
     read -p "Patient's disease: " disease
     bedNo=""
-    bed=0
-    while [ "$bed" -eq 0 ]; do
+    bedc=0
+    bedAvailable
+    while [ "$bedc" -eq 0 ]; do
+        echo ""
         read -p "Admid in bed no: " bedNo
+        AvailableCheck $bedNo
         if grep -q "^.*,.*,.*,${bedNo},.*" patient.csv; then
             echo "Bed number $bedNo already occupied."
         else
-            bed=1
+            bedc=1
         fi
     done
     read -p "Total fees of patient: " fees
@@ -120,7 +147,9 @@ function addPatient() {
     id=$(getNextId)
     due=$((fees - paid))
 
-    echo "$id,$name,$age,$disease,$bedNo,$fees,$paid,$due" >>patient.csv
+    echo "$id, $name,$age,$disease,$bedNo,$fees,$paid,$due" >>patient.csv
+
+    removeBed $bedNo
     echo "Patient admitted"
 }
 searchPatient() {
@@ -213,6 +242,7 @@ while [ $choice == "y" ] || [ $choice == "Y" ]; do
         ;;
     7)
         bedAvailable
+        saveAvailableBeds
         ;;
     *)
         echo "Invalid Input"
