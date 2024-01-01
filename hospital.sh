@@ -16,8 +16,15 @@ getNextId() {
 }
 
 searchPatientByID() {
-    local id="$1"
-    grep "^$id," patient.csv
+    local id_to_search="$1"      # ID to search for
+    local csv_file="patient.csv" # CSV file name
+
+    # Check if the ID exists in the first column of the CSV file
+    if grep -q "^$id_to_search," "$csv_file"; then
+        return 0 # ID found, return true (0)
+    else
+        return 1 # ID not found, return false (1)
+    fi
 }
 
 updateFieldByID() {
@@ -46,7 +53,8 @@ updateFieldByID() {
             "Due") fields[7]="$new_value" ;;
             *)
                 echo "Invalid field name"
-                exit 1
+                rm "$tempfile"
+                return 0
                 ;;
             esac
             echo "${fields[*]}" >>"$tempfile"
@@ -57,23 +65,23 @@ updateFieldByID() {
 
     if ! $found; then
         rm "$tempfile"
-        echo "n"
     else
         mv "$tempfile" "$file"
-        echo "$field_name updated for ID $id."
-        echo "y"
+        echo "Updated"
     fi
 
 }
 
 beds=()
-bedAvailable() {
+loadBeds() {
     unset beds
     while IFS= read -r line; do
         beds+=("$line")
     done <"beds.csv"
-
-    echo "Available Beds:"
+}
+bedAvailable() {
+    loadBeds
+    echo "Available Beds:" ${#beds[@]}
     sorted_beds=($(printf "%s\n" "${beds[@]}" | sort -n))
     printf "%s, " "${sorted_beds[@]}"
     # for bed in "${beds[@]}"; do
@@ -82,6 +90,7 @@ bedAvailable() {
 }
 
 AvailableCheck() {
+    loadBeds
     found=false
     bed_to_check=$1
     for bed in "${beds[@]}"; do
@@ -104,6 +113,7 @@ saveAvailableBeds() {
 }
 
 addBed() {
+    loadBeds
     local new_bed="$1"
     beds+=("$new_bed")
     saveAvailableBeds
@@ -165,13 +175,20 @@ searchPatient() {
 function updatePatient() {
     choice=n
     while [ "$choice" == "n" ]; do
-        read -p "Enter patient id: " id field new
-        choice=$(updateFieldByID $id $field $new)
-        if [[ $choice == "n" ]]; then
-            echo "patient not found"
+        read -p "Enter patient id: " id
+
+        searchPatientByID $id
+        if [ $? -eq 0 ]; then
+            updateFieldByID $id
+            if [ $? -eq 0 ]; then
+                echo ""
+            else
+                choice=y
+            fi
         else
-            echo "patient updated"
+            echo "Patient ID not found."
         fi
+
     done
 
 }
@@ -183,14 +200,19 @@ function releasePatient() {
         read -p "Enter patient id: " id
         local file="patient.csv"
         local tempfile="temp.csv"
-
+        finfo=()
         while IFS=',' read -r line; do
-            local current_id=$(echo "$line" | cut -d',' -f1) # Get the ID of the current line
+            # local info[0]=$(echo "$line" | cut -d',' -f1,5)
+            # read info[0] occuBed <<<$(awk -F ',' '{print $1, $5}' <<<"$line")
+            occuBed=""
+            IFS=',' read -r -a info <<<"$line"
 
-            if [[ "$current_id" != "$id" ]]; then
+            if [[ "${info[0]}" != "$id" ]]; then
                 echo "$line" >>"$tempfile" # Write lines that don't match the ID to temp file
             else
+                occuBed=${info[4]}
                 found=true
+                finfo=("${info[@]}")
             fi
         done <"$file"
 
@@ -198,13 +220,19 @@ function releasePatient() {
             echo "Patient with ID $id not found."
             rm "$tempfile"
         else
-            mv "$tempfile" "$file" && rm -f "$tempfile"
-            echo "Patient with ID $id deleted."
+            if [[ "${finfo[7]}" -gt 0 ]]; then
+                echo "The patient have due of: "${finfo[7]}"TK. Please clear the due."
+            else
+                mv "$tempfile" "$file" && rm -f "$tempfile"
+                echo "Patient with ID $id deleted."
+                addBed $occuBed
+            fi
         fi
 
     done
 }
 printPatients() {
+    clear
     column -s',' -t <patient.csv
 }
 
@@ -216,9 +244,10 @@ while [ $choice == "y" ] || [ $choice == "Y" ]; do
     echo "1. Add a patient"
     echo "2. Search a patient"
     echo "3. Update patient info"
-    echo "4. Release a patient" #See all patients info
+    echo "4. Release a patient"
     echo "5. See all patients info"
-    echo "6. Exit"
+    echo "6. See bed availability"
+    echo "7. Exit"
     read menuOption
 
     case "$menuOption" in
@@ -238,9 +267,10 @@ while [ $choice == "y" ] || [ $choice == "Y" ]; do
         printPatients
         ;;
     6)
-        exit
+        bedAvailable
         ;;
     7)
+        exit
         bedAvailable
         saveAvailableBeds
         ;;
