@@ -233,7 +233,9 @@ function releasePatient() {
 }
 printPatients() {
     clear
-    column -s',' -t <patient.csv
+    # column -s',' -t <patient.csv
+    sort -t',' -k3 -n patient.csv
+
 }
 
 #main programme
