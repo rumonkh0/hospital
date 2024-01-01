@@ -48,9 +48,14 @@ updateFieldByID() {
             "Age") fields[2]="$new_value" ;;
             "Disease") fields[3]="$new_value" ;;
             "BedNo") fields[4]="$new_value" ;;
-            "Fees") fields[5]="$new_value" ;;
-            "Paid") fields[6]="$new_value" ;;
-            "Due") fields[7]="$new_value" ;;
+            "Fees")
+                fields[5]="$new_value"
+                fields[7]=$((fields[5] - fields[6]))
+                ;;
+            "Paid")
+                fields[6]="$((fields[6] + new_value))"
+                fields[7]=$((fields[7] - new_value))
+                ;;
             *)
                 echo "Invalid field name"
                 rm "$tempfile"
@@ -68,6 +73,7 @@ updateFieldByID() {
     else
         mv "$tempfile" "$file"
         echo "Updated"
+        return 1
     fi
 
 }
@@ -233,8 +239,32 @@ function releasePatient() {
 }
 printPatients() {
     clear
-    # column -s',' -t <patient.csv
-    sort -t',' -k3 -n patient.csv
+    column -s',' -t <patient.csv
+    # sort -t',' -k3 -n patient.csv
+    # tail -n +2 patient.csv | sort -t',' -k3 -n | column -s',' -t
+    echo "1) Sort by age"
+    echo "2) Sort by Name"
+    read val
+    case "$val" in
+    1)
+        clear
+        {
+            head -n 1 patient.csv
+            tail -n +2 patient.csv | sort -t',' -k3
+        } | column -s',' -t
+        ;;
+    2)
+        clear
+        {
+            head -n 1 patient.csv
+            tail -n +2 patient.csv | sort -t',' -k2
+        } | column -s',' -t
+
+        ;;
+    *)
+        echo "Enter a valid choice"
+        ;;
+    esac
 
 }
 
