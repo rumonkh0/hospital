@@ -82,6 +82,25 @@ updateFieldByID() {
 
 }
 
+#!/bin/bash
+bedAvailable() {
+
+    csv_file="beds.csv"
+    beds=()
+
+    # Read the CSV file and populate the array
+    while IFS= read -r line; do
+        beds+=("$line")
+    done <"$csv_file"
+
+    # Displaying the content of the array
+    echo "Available Beds:"
+   echo "$(IFS=', '; echo "${beds[*]}")"
+    # for bed in "${beds[@]}"; do
+    #     echo "$bed"
+    # done
+}
+
 function addPatient() {
     read -p "patient name: " name
     read -p "patient age: " age
@@ -191,6 +210,9 @@ while [ $choice == "y" ] || [ $choice == "Y" ]; do
         ;;
     6)
         exit
+        ;;
+    7)
+        bedAvailable
         ;;
     *)
         echo "Invalid Input"
